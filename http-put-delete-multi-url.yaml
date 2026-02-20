@@ -1,59 +1,73 @@
-id: http-put-delete-multi-url
+id: http-put-delete-directory-scan
 
 info:
-  name: HTTP PUT & DELETE Enabled (Multi-URL)
+  name: HTTP PUT & DELETE Method Detection (Directory Level)
   author: iman
   severity: high
   description: |
-    Detects HTTP PUT and DELETE methods enabled on multiple URLs.
-    Attempts to upload a random file via PUT, verify via GET if possible,
-    and then remove it using DELETE.
+    针对爬虫抓取的具体路径进行 PUT 和 DELETE 方法测试。
+    逻辑：1. PUT 随机文件 -> 2. GET 验证内容 -> 3. DELETE 清理文件。
+    支持深层目录探测，如：https://example.com/api/v1/uploads/
   reference:
     - https://portswigger.net/kb/issues/00100900_http-put-method-is-enabled
-  metadata:
-    max-request: 3
-  tags: intrusive,misconfig,put,delete,webdav
+  tags: intrusive,misconfig,put,webdav,dir-scan
 
 variables:
-  filename: "{{randstr}}.txt"
+  filename: "{{rand_base(6)}}.txt"
+  content: "Checking-HTTP-Methods-{{rand_base(12)}}"
 
 http:
   - raw:
-      # 1️⃣ PUT – 尝试写入
       - |
-        PUT {{BasePath}}/{{filename}} HTTP/1.1
+        PUT {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
         Content-Type: text/plain
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
 
-        {{randstr}}
+        {{content}}
 
-      # 2️⃣ GET – 尝试读取（不强制要求成功）
       - |
-        GET {{BasePath}}/{{filename}} HTTP/1.1
+        GET {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
 
-      # 3️⃣ DELETE – 尝试删除
       - |
-        DELETE {{BasePath}}/{{filename}} HTTP/1.1
+        DELETE {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
 
+    # 关键设置：不要在第一个请求匹配后就停止，确保后续的 GET 和 DELETE 能够执行
+    stop-at-first-match: false
+    
     matchers-condition: or
     matchers:
-      # PUT 写入成功（不要求 GET）
+      # 场景 1：完全确认漏洞（可写且可读）
       - type: dsl
-        name: put-enabled
+        name: put-and-get-confirmed
+        description: File successfully uploaded and verified via GET.
         dsl:
-          - 'status_code_1 in [200,201,204]'
+          - "status_code_1 == 201 || status_code_1 == 200 || status_code_1 == 204"
+          - "status_code_2 == 200 && contains(body_2, content)"
+        condition: and
 
-      # PUT + GET 可读（最高危）
+      # 场景 2：PUT 成功但无法直接读取（可能是权限隔离或目录不可写但方法开启）
       - type: dsl
-        name: put-readable
+        name: put-method-enabled
+        description: PUT returned success but file was not readable.
         dsl:
-          - 'status_code_1 in [200,201,204]'
-          - 'contains(body_2, "{{randstr}}")'
+          - "status_code_1 == 201"
+          - "status_code_2 != 200"
+        condition: and
 
-      # DELETE 成功
+      # 场景 3：DELETE 成功（独立检测）
       - type: dsl
-        name: delete-enabled
+        name: delete-method-enabled
+        description: DELETE method appears to be functional.
         dsl:
-          - 'status_code_3 in [200,202,204]'
+          - "status_code_3 == 200 || status_code_3 == 204"
+
+    # 提取器：方便在扫描结果中直接看到被利用的路径
+    extractors:
+      - type: kval
+        kval:
+          - request
