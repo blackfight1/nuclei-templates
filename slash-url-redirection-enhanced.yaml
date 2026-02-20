@@ -1,0 +1,44 @@
+id: slash-url-redirection-enhanced
+
+info:
+  name: Enhanced Multi-Slash URL Redirection
+  author: iman (refined)
+  severity: medium # 提升到 medium，因为这种绕过通常意味着配置缺陷
+  description: |
+    检测利用多斜杠 (////) 绕过路径解析导致的 URL 跳转。
+    改进点：支持动态 Payload、覆盖多种 3xx 状态码、支持无协议跳转。
+  tags: url-redirection,generic,bypass
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}////interact.sh"              # 基础测试
+      - "{{BaseURL}}////https://interact.sh/%2f" # 带协议和编码
+      - "{{BaseURL}}////\\interact.sh"           # 混淆斜杠
+      - "{{BaseURL}}//interact.sh"               # 双斜杠绕过
+
+    stop-at-first-match: true
+    
+    matchers-condition: and
+    matchers:
+      # 1. 匹配常见的跳转状态码
+      - type: status
+        status:
+          - 301
+          - 302
+          - 303
+          - 307
+          - 308
+
+      # 2. 匹配 Location 头
+      - type: word
+        part: header
+        words:
+          - "Location: https://interact.sh"
+          - "Location: http://interact.sh"
+          - "Location: //interact.sh"
+          - "Location: interact.sh"
+        condition: or
+
+    # 3. 辅助验证：确保不是跳回了原站（可选）
+    # condition: "!contains(header, Hostname)"
