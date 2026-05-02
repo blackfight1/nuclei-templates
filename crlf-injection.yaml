@@ -2,8 +2,8 @@ id: crlf-injection-low-fp
 
 info:
   name: CRLF Injection Detection (Low False Positive)
-  author: coffin,codex
-  severity: high
+  author: shoulderleftg
+  severity: low
   description: |
     Detects CRLF injection by comparing a benign baseline request with an
     injected request and only reporting when the injected response adds a new
