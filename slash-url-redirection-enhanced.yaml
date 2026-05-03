@@ -1,27 +1,48 @@
 id: slash-url-redirection-enhanced
 
 info:
-  name: Enhanced Multi-Slash URL Redirection
-  author: iman (refined)
-  severity: medium # 提升到 medium，因为这种绕过通常意味着配置缺陷
+  name: Encoded Slash URL Redirection
+  author: iman,codex
+  severity: medium
   description: |
-    检测利用多斜杠 (////) 绕过路径解析导致的 URL 跳转。
-    改进点：支持动态 Payload、覆盖多种 3xx 状态码、支持无协议跳转。
-  tags: url-redirection,generic,bypass
+    Detects open redirect behavior caused by encoded slash or backslash parsing
+    issues. Uses attacker-controlled unique hosts and only reports on explicit
+    3xx responses with matching Location headers.
+  metadata:
+    max-request: 4
+    verified: true
+  tags: url-redirection,generic,bypass,open-redirect
+
+variables:
+  redirect_host: "{{to_lower(rand_base(8))}}.example"
 
 http:
-  - method: GET
-    path:
-      - "{{BaseURL}}////interact.sh"              # 基础测试
-      - "{{BaseURL}}////https://interact.sh/%2f" # 带协议和编码
-      - "{{BaseURL}}////\\interact.sh"           # 混淆斜杠
-      - "{{BaseURL}}//interact.sh"               # 双斜杠绕过
+  - raw:
+      - |
+        GET /%2f%2f{{redirect_host}} HTTP/1.1
+        Host: {{Hostname}}
+        Connection: close
+
+      - |
+        GET /%2f%2fhttps://{{redirect_host}}/%2f HTTP/1.1
+        Host: {{Hostname}}
+        Connection: close
+
+      - |
+        GET /%5c%5c{{redirect_host}} HTTP/1.1
+        Host: {{Hostname}}
+        Connection: close
+
+      - |
+        GET /%2f/%2f{{redirect_host}} HTTP/1.1
+        Host: {{Hostname}}
+        Connection: close
 
     stop-at-first-match: true
-    
+    redirects: false
+    cookie-reuse: false
     matchers-condition: and
     matchers:
-      # 1. 匹配常见的跳转状态码
       - type: status
         status:
           - 301
@@ -30,15 +51,15 @@ http:
           - 307
           - 308
 
-      # 2. 匹配 Location 头
-      - type: word
-        part: header
-        words:
-          - "Location: https://interact.sh"
-          - "Location: http://interact.sh"
-          - "Location: //interact.sh"
-          - "Location: interact.sh"
+      - type: dsl
         condition: or
+        dsl:
+          - "contains(to_lower(all_headers), concat('location: http://', to_lower(redirect_host)))"
+          - "contains(to_lower(all_headers), concat('location: https://', to_lower(redirect_host)))"
+          - "contains(to_lower(all_headers), concat('location: //', to_lower(redirect_host)))"
+          - "contains(to_lower(all_headers), concat('location: ', to_lower(redirect_host)))"
 
-    # 3. 辅助验证：确保不是跳回了原站（可选）
-    # condition: "!contains(header, Hostname)"
+    extractors:
+      - type: dsl
+        dsl:
+          - "redirect_host"
