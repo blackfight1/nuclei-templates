@@ -33,7 +33,7 @@ http:
       fuzz_url:
         - "http://127.0.0.1:22"
         - "http://127.0.0.1:80"
-        - "http://localhost:80"
+        - "http://localhost:22"
     stop-at-first-match: false
     matchers-condition: or
     matchers:
