@@ -1,0 +1,67 @@
+id: graphql-endpoint-lite
+
+info:
+  name: GraphQL Endpoint Detection (Lite)
+  author: custom-refined
+  severity: info
+  description: |
+    Detects GraphQL API endpoints using a compact path list suitable for large-scale scans.
+  metadata:
+    verified: true
+    max-request: 10
+  tags: tech,graphql,discovery,api
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}{{p}}"
+
+    payloads:
+      p:
+        - "/graphql"
+        - "/api/graphql"
+        - "/gql"
+        - "/query"
+        - "/graph"
+        - "/graphql/v1"
+        - "/v1/graphql"
+        - "/v2/graphql"
+        - "/v3/graphql"
+        - "/api/graphql/v1"
+
+    headers:
+      Content-Type: application/json
+      Accept: application/json, application/graphql-response+json, */*
+
+    body: |
+      {"query":"query IntrospectionQuery { __schema { queryType { name } } }"}
+
+    redirects: false
+    cookie-reuse: false
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: regex
+        part: body
+        regex:
+          - '(?i)"__schema"'
+          - '(?i)"errors"\s*:'
+          - '(?i)"data"\s*:'
+          - '(?i)introspection'
+          - '(?i)cannot query field'
+          - '(?i)must provide query string'
+          - '(?i)syntax error'
+          - '(?i)operation not found'
+          - '(?i)graphql'
+
+      - type: regex
+        part: header
+        regex:
+          - '(?i)application/json'
+          - '(?i)application/graphql-response\+json'
