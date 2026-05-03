@@ -2,14 +2,17 @@ id: http-put-delete-directory-scan
 
 info:
   name: HTTP PUT & DELETE Method Detection (Directory Level)
-  author: iman
+  author: iman,codex
   severity: high
   description: |
-    针对爬虫抓取的具体路径进行 PUT 和 DELETE 方法测试。
-    逻辑：1. PUT 随机文件 -> 2. GET 验证内容 -> 3. DELETE 清理文件。
-    支持深层目录探测，如：https://example.com/api/v1/uploads/
+    Detects writable HTTP directories by attempting PUT, validating the uploaded
+    content via GET, and then cleaning up with DELETE. Also flags practical
+    write-only behavior when PUT succeeds and DELETE works but GET is denied.
   reference:
     - https://portswigger.net/kb/issues/00100900_http-put-method-is-enabled
+  metadata:
+    max-request: 3
+    verified: true
   tags: intrusive,misconfig,put,webdav,dir-scan
 
 variables:
@@ -22,52 +25,43 @@ http:
         PUT {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
         Content-Type: text/plain
-        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+        Connection: close
 
         {{content}}
 
       - |
         GET {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
-        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+        Connection: close
 
       - |
         DELETE {{BaseURL}}{{RequestsDirectory}}/{{filename}} HTTP/1.1
         Host: {{Hostname}}
-        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+        Connection: close
 
-    # 关键设置：不要在第一个请求匹配后就停止，确保后续的 GET 和 DELETE 能够执行
-    stop-at-first-match: false
-    
+    req-condition: true
+    redirects: false
+    cookie-reuse: false
+    stop-at-first-match: true
     matchers-condition: or
     matchers:
-      # 场景 1：完全确认漏洞（可写且可读）
       - type: dsl
-        name: put-and-get-confirmed
-        description: File successfully uploaded and verified via GET.
-        dsl:
-          - "status_code_1 == 201 || status_code_1 == 200 || status_code_1 == 204"
-          - "status_code_2 == 200 && contains(body_2, content)"
+        name: put-get-confirmed
         condition: and
-
-      # 场景 2：PUT 成功但无法直接读取（可能是权限隔离或目录不可写但方法开启）
-      - type: dsl
-        name: put-method-enabled
-        description: PUT returned success but file was not readable.
         dsl:
-          - "status_code_1 == 201"
-          - "status_code_2 != 200"
+          - "status_code_1 == 200 || status_code_1 == 201 || status_code_1 == 204"
+          - "status_code_2 == 200"
+          - "contains(body_2, content)"
+
+      - type: dsl
+        name: put-write-only-confirmed
         condition: and
-
-      # 场景 3：DELETE 成功（独立检测）
-      - type: dsl
-        name: delete-method-enabled
-        description: DELETE method appears to be functional.
         dsl:
+          - "status_code_1 == 200 || status_code_1 == 201 || status_code_1 == 204"
+          - "status_code_2 == 401 || status_code_2 == 403"
           - "status_code_3 == 200 || status_code_3 == 204"
 
-    # 提取器：方便在扫描结果中直接看到被利用的路径
     extractors:
-      - type: kval
-        kval:
-          - request
+      - type: dsl
+        dsl:
+          - "concat(RequestsDirectory, '/', filename)"
